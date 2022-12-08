@@ -92,7 +92,7 @@ VPATH := $(YOSYS_SRC)
 
 CXXSTD ?= c++11
 CXXFLAGS := $(CXXFLAGS) -Wall -Wextra -ggdb -I. -I"$(YOSYS_SRC)" -MD -MP -D_YOSYS_ -fPIC -I$(PREFIX)/include
-LDLIBS := $(LDLIBS) -lstdc++ -lm
+LDLIBS := $(LDLIBS) -lstdc++ -lm -lboost_filesystem
 PLUGIN_LDFLAGS :=
 PLUGIN_LDLIBS :=
 EXE_LDFLAGS :=
