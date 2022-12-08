@@ -24,6 +24,7 @@
 #include "kernel/log.h"
 #include "kernel/register.h"
 #include "kernel/sigtools.h"
+#include <boost/filesystem.hpp>
 #include <cctype>
 #include <cerrno>
 #include <climits>
@@ -65,8 +66,8 @@ USING_YOSYS_NAMESPACE PRIVATE_NAMESPACE_BEGIN
 
 		// Who knew getting a named temporary file was so hard in C++? This isn't a
 		// great solution.
-		auto verilog_filename = "/tmp/module_from_yosys.v";
-		auto out_verilog_filename = "/tmp/module_from_lakeroad.v";
+		auto verilog_filename = (boost::filesystem::unique_path("%%%%-%%%%-%%%%-%%%%.v").native());
+		auto out_verilog_filename = (boost::filesystem::unique_path("%%%%-%%%%-%%%%-%%%%.v").native());
 		std::vector<std::string> write_verilog_args;
 		write_verilog_args.push_back("write_verilog");
 		write_verilog_args.push_back(verilog_filename);
