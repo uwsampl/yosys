@@ -66,8 +66,9 @@ USING_YOSYS_NAMESPACE PRIVATE_NAMESPACE_BEGIN
 
 		// Who knew getting a named temporary file was so hard in C++? This isn't a
 		// great solution.
-		auto verilog_filename = (boost::filesystem::unique_path("%%%%-%%%%-%%%%-%%%%.v").native());
-		auto out_verilog_filename = (boost::filesystem::unique_path("%%%%-%%%%-%%%%-%%%%.v").native());
+		auto verilog_filename = (boost::filesystem::temp_directory_path() / boost::filesystem::unique_path("%%%%-%%%%-%%%%-%%%%.v")).native();
+		auto out_verilog_filename =
+		  (boost::filesystem::temp_directory_path() / boost::filesystem::unique_path("%%%%-%%%%-%%%%-%%%%.v")).native();
 		std::vector<std::string> write_verilog_args;
 		write_verilog_args.push_back("write_verilog");
 		write_verilog_args.push_back(verilog_filename);
