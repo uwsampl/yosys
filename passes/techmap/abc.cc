@@ -41,20 +41,20 @@
 #define ABC_FAST_COMMAND_SOP "strash; dretime; cover {I} {P}"
 #define ABC_FAST_COMMAND_DFL "strash; dretime; map"
 
+#include "kernel/celltypes.h"
+#include "kernel/cost.h"
+#include "kernel/ff.h"
+#include "kernel/ffinit.h"
+#include "kernel/log.h"
 #include "kernel/register.h"
 #include "kernel/sigtools.h"
-#include "kernel/celltypes.h"
-#include "kernel/ffinit.h"
-#include "kernel/ff.h"
-#include "kernel/cost.h"
-#include "kernel/log.h"
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
 #include <cctype>
 #include <cerrno>
-#include <sstream>
 #include <climits>
+#include <sstream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <vector>
 
 #ifndef _WIN32
@@ -1025,8 +1025,10 @@ void abc_module(RTLIL::Design *design, RTLIL::Module *current_module, std::strin
 	fprintf(f, ".end\n");
 	fclose(f);
 
-	log("Extracted %d gates and %d wires to a netlist network with %d inputs and %d outputs.\n",
-			count_gates, GetSize(signal_list), count_input, count_output);
+	system(("cat " + buffer).c_str());
+
+	log("Extracted %d gates and %d wires to a netlist network with %d inputs and %d outputs.\n", count_gates, GetSize(signal_list), count_input,
+	    count_output);
 	log_push();
 	if (count_output > 0)
 	{
