@@ -55,12 +55,17 @@ USING_YOSYS_NAMESPACE PRIVATE_NAMESPACE_BEGIN
 		log_header(design, "Executing Lakeroad pass (technology mapping using Lakeroad).\n");
 		log_push();
 
-		if (args.size() != 5)
+		if (args.size() != 9 && args.size() != 10)
 			log_cmd_error("Invalid number of arguments!\n");
 		auto top_module_name = args[1];
 		auto output_signal_name = args[2];
 		auto architecture = args[3];
 		auto templ8 = args[4];
+		auto initiation_interval = args[5];
+		auto clock_name = args[6];
+		auto input_a = args[7];
+		auto input_b = args[8];
+		auto input_c = args.size() == 10 ? args[9] : "";
 
 		auto module_name = top_module_name + "_synthesized_by_lakeroad";
 
@@ -87,7 +92,14 @@ USING_YOSYS_NAMESPACE PRIVATE_NAMESPACE_BEGIN
 			 << " --verilog-module-out-signal " << output_signal_name
 			 << " --architecture " << architecture
 			 << " --template " << templ8
-			 << " --module-name " << module_name;
+			 << " --module-name " << module_name
+			 << " --clock-name " << clock_name
+			 << " --input-signal " << input_a
+			 << " --input-signal " << input_b;
+		if (initiation_interval != "0")
+			ss << " --initiation-interval " << initiation_interval;
+		if (input_c != "")
+			ss << " --input-signal " << input_c;
 		// clang-format on
 
 		log("Executing Lakeroad:\n%s\n", ss.str().c_str());
