@@ -1,7 +1,7 @@
 all: dots tex svg tidy
 
 TEX_SOURCE:= $(wildcard *.tex)
-DOT_LOC:= ../../manual/APPNOTE_011_Design_Investigation
+DOT_LOC:= ../source/APPNOTE_011_Design_Investigation
 DOT_SOURCE:= $(wildcard $(DOT_LOC)/*.dot)
 
 TEX_SOURCE+= 011/example_out.tex
@@ -22,10 +22,10 @@ tex: $(TEX_PDF)
 svg: $(SVG_OUTPUT)
 
 011/%.pdf: $(DOT_LOC)/%.dot
-	FAKETIME_DONT_RESET=0 faketime '2022-01-01 00:00:00' dot -Tpdf -o $@ $<
+	faketime -f '2022-01-01 00:00:00 x0,001' dot -Tpdf -o $@ $<
 
 011/%.pdf: 011/%.tex
-	cd 011 && FAKETIME_DONT_RESET=0 faketime '2022-01-01 00:00:00' pdflatex $(<F) --interaction=nonstopmode
+	cd 011 && faketime -f '2022-01-01 00:00:00 x0,001' pdflatex $(<F) --interaction=nonstopmode
 
 %.pdf: %.tex
 	pdflatex $< --interaction=nonstopmode

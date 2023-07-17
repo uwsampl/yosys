@@ -1,7 +1,6 @@
 
 CONFIG := clang
 # CONFIG := gcc
-# CONFIG := gcc-4.8
 # CONFIG := afl-gcc
 # CONFIG := emcc
 # CONFIG := wasi
@@ -142,7 +141,7 @@ LDLIBS += -lrt
 endif
 endif
 
-YOSYS_VER := 0.23+8
+YOSYS_VER := 0.30+48
 
 # Note: We arrange for .gitcommit to contain the (short) commit hash in
 # tarballs generated with git-archive(1) using .gitattributes. The git repo
@@ -150,7 +149,7 @@ YOSYS_VER := 0.23+8
 # back to calling git directly.
 TARBALL_GIT_REV := $(shell cat $(YOSYS_SRC)/.gitcommit)
 ifeq ($(TARBALL_GIT_REV),$$Format:%h$$)
-GIT_REV := $(shell git ls-remote $(YOSYS_SRC) HEAD -q | $(AWK) 'BEGIN {R = "UNKNOWN"}; ($$2 == "HEAD") {R = substr($$1, 1, 9); exit} END {print R}')
+GIT_REV := $(shell GIT_DIR=$(YOSYS_SRC)/.git git rev-parse --short=9 HEAD || echo UNKNOWN)
 else
 GIT_REV := $(TARBALL_GIT_REV)
 endif
@@ -158,7 +157,7 @@ endif
 OBJS = kernel/version_$(GIT_REV).o
 
 bumpversion:
-	sed -i "/^YOSYS_VER := / s/+[0-9][0-9]*$$/+`git log --oneline 7ce5011.. | wc -l`/;" Makefile
+	sed -i "/^YOSYS_VER := / s/+[0-9][0-9]*$$/+`git log --oneline f7a8284.. | wc -l`/;" Makefile
 
 # set 'ABCREV = default' to use abc/ as it is
 #
@@ -166,7 +165,7 @@ bumpversion:
 # is just a symlink to your actual ABC working directory, as 'make mrproper'
 # will remove the 'abc' directory and you do not want to accidentally
 # delete your work on ABC..
-ABCREV = be9a35c
+ABCREV = bb64142
 ABCPULL = 1
 ABCURL ?= https://github.com/YosysHQ/abc
 ABCMKARGS = CC="$(CXX)" CXX="$(CXX)" ABC_USE_LIBSTDCXX=1 ABC_USE_NAMESPACE=abc VERBOSE=$(Q)
@@ -255,12 +254,6 @@ ABCMKARGS = CC="$(CC)" CXX="$(CXX)" LD="$(LD)" ABC_USE_LIBSTDCXX=1 LIBS="-lm -lp
 ifeq ($(DISABLE_ABC_THREADS),1)
 ABCMKARGS += "ABC_USE_NO_PTHREADS=1"
 endif
-
-else ifeq ($(CONFIG),gcc-4.8)
-CXX = gcc-4.8
-LD = gcc-4.8
-CXXFLAGS += -std=$(CXXSTD) -Os
-ABCMKARGS += ARCHFLAGS="-DABC_USE_STDINT_H"
 
 else ifeq ($(CONFIG),afl-gcc)
 CXX = AFL_QUIET=1 AFL_HARDEN=1 afl-gcc
@@ -379,7 +372,7 @@ ABCMKARGS += LIBS="-lpthread -s" ABC_USE_NO_READLINE=0 CC="x86_64-w64-mingw32-gc
 EXE = .exe
 
 else ifneq ($(CONFIG),none)
-$(error Invalid CONFIG setting '$(CONFIG)'. Valid values: clang, gcc, gcc-4.8, emcc, mxe, msys2-32, msys2-64)
+$(error Invalid CONFIG setting '$(CONFIG)'. Valid values: clang, gcc, emcc, mxe, msys2-32, msys2-64)
 endif
 
 ifeq ($(ENABLE_LIBYOSYS),1)
@@ -530,6 +523,7 @@ CXXFLAGS += -I$(GHDL_INCLUDE_DIR) -DYOSYS_ENABLE_GHDL
 LDLIBS += $(GHDL_LIB_DIR)/libghdl.a $(file <$(GHDL_LIB_DIR)/libghdl.link)
 endif
 
+LDLIBS_VERIFIC =
 ifeq ($(ENABLE_VERIFIC),1)
 VERIFIC_DIR ?= /usr/local/src/verific_lib
 VERIFIC_COMPONENTS ?= verilog database util containers hier_tree
@@ -555,9 +549,9 @@ CXXFLAGS += -DYOSYSHQ_VERIFIC_EXTENSIONS
 endif
 CXXFLAGS += $(patsubst %,-I$(VERIFIC_DIR)/%,$(VERIFIC_COMPONENTS)) -DYOSYS_ENABLE_VERIFIC
 ifeq ($(OS), Darwin)
-LDLIBS += $(patsubst %,$(VERIFIC_DIR)/%/*-mac.a,$(VERIFIC_COMPONENTS)) -lz
+LDLIBS_VERIFIC += $(foreach comp,$(patsubst %,$(VERIFIC_DIR)/%/*-mac.a,$(VERIFIC_COMPONENTS)),-Wl,-force_load $(comp)) -lz
 else
-LDLIBS += $(patsubst %,$(VERIFIC_DIR)/%/*-linux.a,$(VERIFIC_COMPONENTS)) -lz
+LDLIBS_VERIFIC += -Wl,--whole-archive $(patsubst %,$(VERIFIC_DIR)/%/*-linux.a,$(VERIFIC_COMPONENTS)) -Wl,--no-whole-archive -lz
 endif
 endif
 
@@ -660,7 +654,7 @@ ifneq ($(ABCEXTERNAL),)
 kernel/yosys.o: CXXFLAGS += -DABCEXTERNAL='"$(ABCEXTERNAL)"'
 endif
 endif
-OBJS += kernel/cellaigs.o kernel/celledges.o kernel/satgen.o kernel/qcsat.o kernel/mem.o kernel/ffmerge.o kernel/ff.o
+OBJS += kernel/cellaigs.o kernel/celledges.o kernel/satgen.o kernel/qcsat.o kernel/mem.o kernel/ffmerge.o kernel/ff.o kernel/yw.o kernel/json.o
 ifeq ($(ENABLE_ZLIB),1)
 OBJS += kernel/fstdata.o
 endif
@@ -747,13 +741,13 @@ yosys.js: $(filter-out yosysjs-$(YOSYS_VER).zip,$(EXTRA_TARGETS))
 endif
 
 $(PROGRAM_PREFIX)yosys$(EXE): $(OBJS)
-	$(P) $(LD) -o $(PROGRAM_PREFIX)yosys$(EXE) $(EXE_LDFLAGS) $(LDFLAGS) $(OBJS) $(LDLIBS)
+	$(P) $(LD) -o $(PROGRAM_PREFIX)yosys$(EXE) $(EXE_LDFLAGS) $(LDFLAGS) $(OBJS) $(LDLIBS) $(LDLIBS_VERIFIC)
 
 libyosys.so: $(filter-out kernel/driver.o,$(OBJS))
 ifeq ($(OS), Darwin)
-	$(P) $(LD) -o libyosys.so -shared -Wl,-install_name,$(LIBDIR)/libyosys.so $(LDFLAGS) $^ $(LDLIBS)
+	$(P) $(LD) -o libyosys.so -shared -Wl,-install_name,$(LIBDIR)/libyosys.so $(LDFLAGS) $^ $(LDLIBS) $(LDLIBS_VERIFIC)
 else
-	$(P) $(LD) -o libyosys.so -shared -Wl,-soname,$(LIBDIR)/libyosys.so $(LDFLAGS) $^ $(LDLIBS)
+	$(P) $(LD) -o libyosys.so -shared -Wl,-soname,$(LIBDIR)/libyosys.so $(LDFLAGS) $^ $(LDLIBS) $(LDLIBS_VERIFIC)
 endif
 
 %.o: %.cc
@@ -804,13 +798,13 @@ ifneq ($(ABCREV),default)
 	$(Q) if test -d abc && test -d abc/.git && ! git -C abc diff-index --quiet HEAD; then \
 		echo 'REEBE: NOP pbagnvaf ybpny zbqvsvpngvbaf! Frg NOPERI=qrsnhyg va Lbflf Znxrsvyr!' | tr 'A-Za-z' 'N-ZA-Mn-za-m'; false; \
 	fi
-	$(Q) if test -d abc && ! test -d abc/.git && ! test "`cat abc/.gitcommit | cut -c1-7`" == "$(ABCREV)"; then \
+	$(Q) if test -d abc && ! test -d abc/.git && ! test "`cat abc/.gitcommit | cut -c1-7`" = "$(ABCREV)"; then \
 		echo 'REEBE: Qbjaybnqrq NOP irefvbaf qbrf abg zngpu! Qbjaybnq sebz:' | tr 'A-Za-z' 'N-ZA-Mn-za-m'; echo $(ABCURL)/archive/$(ABCREV).tar.gz; false; \
 	fi
 # set a variable so the test fails if git fails to run - when comparing outputs directly, empty string would match empty string
-	$(Q) if test -d abc && ! test -d abc/.git && test "`cat abc/.gitcommit | cut -c1-7`" == "$(ABCREV)"; then \
+	$(Q) if test -d abc && ! test -d abc/.git && test "`cat abc/.gitcommit | cut -c1-7`" = "$(ABCREV)"; then \
 		echo "Compiling local copy of ABC"; \
-	elif ! (cd abc 2> /dev/null && rev="`git rev-parse $(ABCREV)`" && test "`git rev-parse HEAD`" == "$$rev"); then \
+	elif ! (cd abc 2> /dev/null && rev="`git rev-parse $(ABCREV)`" && test "`git rev-parse HEAD`" = "$$rev"); then \
 		test $(ABCPULL) -ne 0 || { echo 'REEBE: NOP abg hc gb qngr naq NOPCHYY frg gb 0 va Znxrsvyr!' | tr 'A-Za-z' 'N-ZA-Mn-za-m'; exit 1; }; \
 		echo "Pulling ABC from $(ABCURL):"; set -x; \
 		test -d abc || git clone $(ABCURL) abc; \
@@ -844,6 +838,9 @@ ABCOPT=""
 endif
 
 test: $(TARGETS) $(EXTRA_TARGETS)
+ifeq ($(ENABLE_VERIFIC),1)
+	+cd tests/verific && bash run-test.sh $(SEEDOPT)
+endif
 	+cd tests/simple && bash run-test.sh $(SEEDOPT)
 	+cd tests/simple_abc9 && bash run-test.sh $(SEEDOPT)
 	+cd tests/hana && bash run-test.sh $(SEEDOPT)
@@ -881,6 +878,7 @@ test: $(TARGETS) $(EXTRA_TARGETS)
 	+cd tests/rpc && bash run-test.sh
 	+cd tests/memfile && bash run-test.sh
 	+cd tests/verilog && bash run-test.sh
+	+cd tests/xprop && bash run-test.sh $(SEEDOPT)
 	@echo ""
 	@echo "  Passed \"make test\"."
 	@echo ""
@@ -963,26 +961,22 @@ docs/source/cmd/abc.rst: $(TARGETS) $(EXTRA_TARGETS)
 	mkdir -p docs/source/cmd
 	./$(PROGRAM_PREFIX)yosys -p 'help -write-rst-command-reference-manual'
 
-PHONY: docs/gen_images
+PHONY: docs/gen_images docs/guidelines
 docs/gen_images:
 	$(Q) $(MAKE) -C docs/images all
 
+DOCS_GUIDELINE_FILES := GettingStarted CodingStyle
+docs/guidelines:
+	$(Q) mkdir -p docs/source/temp
+	$(Q) cp -f $(addprefix guidelines/,$(DOCS_GUIDELINE_FILES)) docs/source/temp
+
 DOC_TARGET ?= html
-docs: docs/source/cmd/abc.rst docs/gen_images
+docs: docs/source/cmd/abc.rst docs/gen_images docs/guidelines
 	$(Q) $(MAKE) -C docs $(DOC_TARGET)
-
-update-manual: $(TARGETS) $(EXTRA_TARGETS)
-	cd manual && ../$(PROGRAM_PREFIX)yosys -p 'help -write-tex-command-reference-manual'
-
-manual: $(TARGETS) $(EXTRA_TARGETS)
-	cd manual && bash appnotes.sh
-	cd manual && bash presentation.sh
-	cd manual && bash manual.sh
 
 clean:
 	rm -rf share
 	rm -rf kernel/*.pyh
-	if test -d manual; then cd manual && sh clean.sh; fi
 	rm -f $(OBJS) $(GENFILES) $(TARGETS) $(EXTRA_TARGETS) $(EXTRA_OBJS) $(PY_WRAP_INCLUDES) $(PY_WRAPPER_FILE).cc
 	rm -f kernel/version_*.o kernel/version_*.cc
 	rm -f libs/*/*.d frontends/*/*.d passes/*/*.d backends/*/*.d kernel/*.d techlibs/*/*.d
@@ -1057,9 +1051,6 @@ config-gcc-static: clean
 	echo 'ENABLE_READLINE := 0' >> Makefile.conf
 	echo 'ENABLE_TCL := 0' >> Makefile.conf
 
-config-gcc-4.8: clean
-	echo 'CONFIG := gcc-4.8' > Makefile.conf
-
 config-afl-gcc: clean
 	echo 'CONFIG := afl-gcc' > Makefile.conf
 
@@ -1122,5 +1113,5 @@ echo-abc-rev:
 -include kernel/*.d
 -include techlibs/*/*.d
 
-.PHONY: all top-all abc test install install-abc docs manual clean mrproper qtcreator coverage vcxsrc mxebin
-.PHONY: config-clean config-clang config-gcc config-gcc-static config-gcc-4.8 config-afl-gcc config-gprof config-sudo
+.PHONY: all top-all abc test install install-abc docs clean mrproper qtcreator coverage vcxsrc mxebin
+.PHONY: config-clean config-clang config-gcc config-gcc-static config-afl-gcc config-gprof config-sudo

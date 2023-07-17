@@ -203,7 +203,7 @@ namespace AST
 
 		// if this is a multirange memory then this vector contains offset and length of each dimension
 		std::vector<int> multirange_dimensions;
-		std::vector<bool> multirange_swapped; // true if range is swapped, not used for structs
+		std::vector<bool> multirange_swapped; // true if range is swapped
 
 		// this is set by simplify and used during RTLIL generation
 		AstNode *id2ast;
@@ -380,6 +380,7 @@ namespace AST
 
 	// struct helper exposed from simplify for genrtlil
 	AstNode *make_struct_member_range(AstNode *node, AstNode *member_node);
+	AstNode *get_struct_member(const AstNode *node);
 
 	// generate standard $paramod... derived module name; parameters should be
 	// in the order they are declared in the instantiated module

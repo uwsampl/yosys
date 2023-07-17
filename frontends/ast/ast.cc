@@ -524,7 +524,13 @@ void AstNode::dumpVlog(FILE *f, std::string indent) const
 		break;
 
 	case AST_IDENTIFIER:
-		fprintf(f, "%s", id2vl(str).c_str());
+		{
+			AST::AstNode *member_node = AST::get_struct_member(this);
+			if (member_node)
+				fprintf(f, "%s[%d:%d]", id2vl(str).c_str(), member_node->range_left, member_node->range_right);
+			else
+				fprintf(f, "%s", id2vl(str).c_str());
+		}
 		for (auto child : children)
 			child->dumpVlog(f, "");
 		break;
@@ -841,7 +847,7 @@ RTLIL::Const AstNode::bitsAsConst(int width, bool is_signed)
 		bits.resize(width);
 	if (width >= 0 && width > int(bits.size())) {
 		RTLIL::State extbit = RTLIL::State::S0;
-		if (is_signed && !bits.empty())
+		if ((is_signed || is_unsized) && !bits.empty())
 			extbit = bits.back();
 		while (width > int(bits.size()))
 			bits.push_back(extbit);
@@ -1649,7 +1655,7 @@ RTLIL::IdString AstModule::derive(RTLIL::Design *design, const dict<RTLIL::IdStr
 	AstNode *new_ast = NULL;
 	std::string modname = derive_common(design, parameters, &new_ast, quiet);
 
-	if (!design->has(modname)) {
+	if (!design->has(modname) && new_ast) {
 		new_ast->str = modname;
 		process_module(design, new_ast, false, NULL, quiet);
 		design->module(modname)->check();
@@ -1699,6 +1705,7 @@ std::string AST::derived_module_name(std::string stripped_name, const std::vecto
 std::string AstModule::derive_common(RTLIL::Design *design, const dict<RTLIL::IdString, RTLIL::Const> &parameters, AstNode **new_ast_out, bool quiet)
 {
 	std::string stripped_name = name.str();
+	(*new_ast_out) = nullptr;
 
 	if (stripped_name.compare(0, 9, "$abstract") == 0)
 		stripped_name = stripped_name.substr(9);

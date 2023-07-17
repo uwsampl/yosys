@@ -458,11 +458,14 @@ struct Smt2Worker
 	{
 		RTLIL::SigSpec sig_a, sig_b;
 		RTLIL::SigSpec sig_y = sigmap(cell->getPort(ID::Y));
-		bool is_signed = cell->getParam(ID::A_SIGNED).as_bool();
+		bool is_signed = type == 'U' ? false : cell->getParam(ID::A_SIGNED).as_bool();
 		int width = GetSize(sig_y);
 
 		if (type == 's' || type == 'S' || type == 'd' || type == 'b') {
-			width = max(width, GetSize(cell->getPort(ID::A)));
+			if (type == 'b')
+				width = GetSize(cell->getPort(ID::A));
+			else
+				width = max(width, GetSize(cell->getPort(ID::A)));
 			if (cell->hasPort(ID::B))
 				width = max(width, GetSize(cell->getPort(ID::B)));
 		}
@@ -483,6 +486,7 @@ struct Smt2Worker
 			if (ch == 'A') processed_expr += get_bv(sig_a);
 			else if (ch == 'B') processed_expr += get_bv(sig_b);
 			else if (ch == 'P') processed_expr += get_bv(cell->getPort(ID::B));
+			else if (ch == 'S') processed_expr += get_bv(cell->getPort(ID::S));
 			else if (ch == 'L') processed_expr += is_signed ? "a" : "l";
 			else if (ch == 'U') processed_expr += is_signed ? "s" : "u";
 			else processed_expr += ch;
@@ -622,9 +626,13 @@ struct Smt2Worker
 				}
 
 				bool init_only = cell->type.in(ID($anyconst), ID($anyinit), ID($allconst));
-				for (auto chunk : cell->getPort(QY).chunks())
+				bool clk2fflogic = cell->type == ID($anyinit) && cell->get_bool_attribute(ID(clk2fflogic));
+				int smtoffset = 0;
+				for (auto chunk : cell->getPort(clk2fflogic ? ID::D : QY).chunks()) {
 					if (chunk.is_wire())
-						decls.push_back(witness_signal(init_only ? "init" : "seq", chunk.width, chunk.offset, "", idcounter, chunk.wire));
+						decls.push_back(witness_signal(init_only ? "init" : "seq", chunk.width, chunk.offset, "", idcounter, chunk.wire, smtoffset));
+					smtoffset += chunk.width;
+				}
 
 				makebits(stringf("%s#%d", get_id(module), idcounter), GetSize(cell->getPort(QY)), log_signal(cell->getPort(QY)));
 				if (cell->type == ID($anyseq))
@@ -638,6 +646,9 @@ struct Smt2Worker
 			if (cell->type == ID($or)) return export_bvop(cell, "(bvor A B)");
 			if (cell->type == ID($xor)) return export_bvop(cell, "(bvxor A B)");
 			if (cell->type == ID($xnor)) return export_bvop(cell, "(bvxnor A B)");
+
+			if (cell->type == ID($bweqx)) return export_bvop(cell, "(bvxnor A B)", 'U');
+			if (cell->type == ID($bwmux)) return export_bvop(cell, "(bvor (bvand A (bvnot S)) (bvand B S))", 'U');
 
 			if (cell->type == ID($shl)) return export_bvop(cell, "(bvshl A B)", 's');
 			if (cell->type == ID($shr)) return export_bvop(cell, "(bvlshr A B)", 's');
@@ -762,7 +773,7 @@ struct Smt2Worker
 			int arrayid = idcounter++;
 			memarrays[mem] = arrayid;
 
-			int abits = ceil_log2(mem->size);
+			int abits = max(1, ceil_log2(mem->size));
 
 			bool has_sync_wr = false;
 			bool has_async_wr = false;
@@ -994,7 +1005,7 @@ struct Smt2Worker
 				if (contains_clock && GetSize(wire) == 1 && (clock_posedge.count(sig) || clock_negedge.count(sig)))
 					comments.push_back(stringf("; yosys-smt2-clock %s%s%s\n", get_id(wire),
 							clock_posedge.count(sig) ? " posedge" : "", clock_negedge.count(sig) ? " negedge" : ""));
-				if (contains_clock) {
+				if (wire->port_input && contains_clock) {
 					for (int i = 0; i < GetSize(sig); i++) {
 						bool is_posedge = clock_posedge.count(sig[i]);
 						bool is_negedge = clock_negedge.count(sig[i]);
@@ -1209,7 +1220,7 @@ struct Smt2Worker
 			{
 				int arrayid = memarrays.at(mem);
 
-				int abits = ceil_log2(mem->size);;
+				int abits = max(1, ceil_log2(mem->size));
 
 				bool has_sync_wr = false;
 				bool has_async_wr = false;

@@ -2,8 +2,112 @@
 List of major changes and improvements between releases
 =======================================================
 
-Yosys 0.23 .. Yosys 0.23-dev
+Yosys 0.30 .. Yosys 0.31-dev
 --------------------------
+
+Yosys 0.29 .. Yosys 0.30
+--------------------------
+ * New commands and options
+    - Added "recover_names" pass to recover names post-mapping.
+
+ * Gowin support
+    - Added remaining primitives blackboxes.
+
+ * Various
+    - "show -colorattr" will now color the cells, wires, and 
+      connection arrows.
+    - "show -viewer none" will not execute viewer.
+
+Yosys 0.28 .. Yosys 0.29
+--------------------------
+ * New commands and options
+    - Added "synthprop" pass for synthesizable properties.
+
+ * Verific support
+    - Handle conditions on clocked concurrent assertions in unclocked
+      procedural contexts.
+
+ * Verilog
+    - Fix const eval of unbased unsized constants.
+    - Handling of attributes for struct / union variables.
+
+Yosys 0.27 .. Yosys 0.28
+--------------------------
+ * Verilog
+    - Out of bounds checking for struct/union members.
+
+ * Verific support
+    - Fix enum_values support and signed attribute values.
+
+ * ECP5 support
+    - Added "synth_ecp5 -iopad"
+
+ * MachXO2 support
+    - Added "synth_machxo2 -ccu2"
+
+Yosys 0.26 .. Yosys 0.27
+--------------------------
+ * New commands and options
+    - Added option "-make_assert" to "equiv_make" pass.
+    - Added option "-coverenable" to "chformal" pass.
+
+ * Verilog
+    - Resolve package types in interfaces.
+    - Handle range offsets in packed arrays within packed structs.
+    - Support for data and array queries on struct/union item expressions.
+
+ * GateMate support
+    - Enable register initialization.
+
+Yosys 0.25 .. Yosys 0.26
+--------------------------
+ * New commands and options
+    - Added "bwmuxmap" pass to replace $bwmux cells with equivalent logic.
+    - Added "xprop" experimental pass for formal x propagation.
+    - Added "splitcells" pass to split up multi-bit cells.
+    - Added "viz" pass to visualize data flow graph.
+    - Added option "-make_cover" to "miter" pass.
+    - Added option "-noparallelcase" to "write_verilog" pass.
+    - Added option "-chain" to "insbuf" pass.
+    - Added options "-hierarchy" and "-assume" to "formalff" pass.
+    - Added options "-append" and "-summary" to "sim" pass.
+    - Added option "-ywmap" to "write_btor" pass.
+    - Added option "-ignore-self-reset" to "fsm_detect" pass.
+
+ * Verilog
+    - Support for struct members of union type.
+    - Support for struct member package types.
+
+ * Various
+    - Added Yosys witness (.yw) cosimulation.
+    - GCC 4.8 is deprecated, compiler with full C++11 support is required.
+
+Yosys 0.24 .. Yosys 0.25
+--------------------------
+ * Verific support
+    - Respect "noblackbox" attribute for modules.
+
+ * Various
+    - Documentation is hosted at https://yosyshq.readthedocs.io/projects/yosys/en/latest/
+
+Yosys 0.23 .. Yosys 0.24
+--------------------------
+ * New commands and options
+    - Added option "-set-def-formal" to "sat" pass.
+    - Added option "-s" to "tee" command.
+
+ * Verilog
+    - Support for module-scoped identifiers referring to tasks and functions.
+    - Support for arrays with swapped ranges within structs.
+
+ * Verific support
+    - Support for importing verilog configurations per name.
+    - "verific -set-XXXXX" commands are now able to set severity to all messages
+      of certain type (errors, warnings, infos and comments)
+
+ * Various
+    - TCL shell support (use "yosys -C")
+    - Added FABulous eFPGA frontend
 
 Yosys 0.22 .. Yosys 0.23
 --------------------------

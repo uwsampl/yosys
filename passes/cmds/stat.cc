@@ -275,6 +275,9 @@ struct statdata_t
 		log("         \"num_memory_bits\":   %u,\n", num_memory_bits);
 		log("         \"num_processes\":     %u,\n", num_processes);
 		log("         \"num_cells\":         %u,\n", num_cells);
+		if (area != 0) {
+			log("         \"area\":              %f,\n", area);
+		}
 		log("         \"num_cells_by_type\": {\n");
 		bool first_line = true;
 		for (auto &it : num_cells_by_type)
@@ -313,7 +316,7 @@ statdata_t hierarchy_worker(std::map<RTLIL::IdString, statdata_t> &mod_stat, RTL
 		if (mod_stat.count(it.first) > 0) {
 			if (!quiet)
 				log("     %*s%-*s %6u\n", 2*level, "", 26-2*level, log_id(it.first), it.second);
-			mod_data = mod_data + hierarchy_worker(mod_stat, it.first, level+1) * it.second;
+			mod_data = mod_data + hierarchy_worker(mod_stat, it.first, level+1, quiet) * it.second;
 			mod_data.num_cells -= it.second;
 		} else {
 			mod_data.num_cells_by_type[it.first] += it.second;
@@ -452,7 +455,7 @@ struct StatPass : public Pass {
 
 		if (json_mode) {
 			log("\n");
-			log("   },\n");
+			log(top_mod == nullptr ? "   }\n" : "   },\n");
 		}
 
 		if (top_mod != nullptr)
@@ -466,7 +469,7 @@ struct StatPass : public Pass {
 
 			statdata_t data = hierarchy_worker(mod_stat, top_mod->name, 0, /*quiet=*/json_mode);
 
-			if (json_mode) 
+			if (json_mode)
 				data.log_data_json("design", true);
 			else if (GetSize(mod_stat) > 1) {
 				log("\n");
