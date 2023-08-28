@@ -1,4 +1,6 @@
 
+OBJS += passes/techmap/lakeroad.o
+
 OBJS += passes/techmap/flatten.o
 OBJS += passes/techmap/techmap.o
 OBJS += passes/techmap/simplemap.o
