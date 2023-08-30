@@ -16,9 +16,7 @@ module test (
 endmodule
 EOT
 
-
-select
-
 lakeroad
 
+# Ensure that one DSP has been instantiated.
 select -assert-count 1 */t:DSP48E2
