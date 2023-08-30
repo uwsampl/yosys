@@ -1,21 +1,29 @@
+# Test Lakeroad pass in Yosys.
+
+# Read in Verilog design annotated with information for Lakeroad.
 read_verilog << EOT
-(* template = "dsp", architecture = "xilinx-ultrascale-plus", initiation_interval = 1 *)
-module test (
-    (* data *) 
-    input [7:0] a,
-    (* data *)
-    input [7:0] b,
-    (* clk *)
-    input clk,
-    (* out *)
-    output [7:0] o);
-  reg [7:0] r0;
-  always @ (posedge clk)
-    r0 <= a*b;
-  assign o = r0;
-endmodule
+  (* template = "dsp",
+     architecture = "xilinx-ultrascale-plus",
+     initiation_interval = 1 *)
+  module test (
+      (* data *) 
+      input [7:0] a,
+      (* data *)
+      input [7:0] b,
+      (* clk *)
+      input clk,
+      (* out *)
+      output [7:0] o);
+
+    reg [7:0] r0;
+    always @ (posedge clk)
+      r0 <= a*b;
+    assign o = r0;
+
+  endmodule
 EOT
 
+# Call Lakeroad pass.
 lakeroad
 
 # Ensure that one DSP has been instantiated.
