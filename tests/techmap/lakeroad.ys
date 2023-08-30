@@ -1,0 +1,24 @@
+read_verilog << EOT
+(* template = "dsp", architecture = "xilinx-ultrascale-plus", initiation_interval = 1 *)
+module test (
+    (* data *) 
+    input [7:0] a,
+    (* data *)
+    input [7:0] b,
+    (* clk *)
+    input clk,
+    (* out *)
+    output [7:0] o);
+  reg [7:0] r0;
+  always @ (posedge clk)
+    r0 <= a*b;
+  assign o = r0;
+endmodule
+EOT
+
+
+select
+
+lakeroad
+
+select -assert-count 1 */t:DSP48E2
