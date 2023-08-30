@@ -120,7 +120,7 @@ USING_YOSYS_NAMESPACE PRIVATE_NAMESPACE_BEGIN
 	read_verilog_args.push_back(out_verilog_filename);
 	Pass::call(design, read_verilog_args);
 
-	log("Replacing module %s with the output of Lakeroad", top_module_name.c_str());
+	log("Replacing module %s with the output of Lakeroad\n", top_module_name.c_str());
 	design->remove(module);
 	auto new_module = design->module(RTLIL::escape_id(temp_module_name));
 	if (new_module == nullptr)
