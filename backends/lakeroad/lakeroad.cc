@@ -1164,7 +1164,7 @@ struct LakeroadWorker {
 
 		// Generate wire expression.
 		auto wire_expr = [&](const std::string &name, const int bitwidth) {
-			auto s = stringf("(Wire %s %d)", name.c_str(), bitwidth);
+			auto s = stringf("(Wire \"%s\" %d)", name.c_str(), bitwidth);
 			wire_exprs.push_back(s);
 			return s;
 		};
@@ -1206,7 +1206,7 @@ struct LakeroadWorker {
 				assert(signal_let_bound_name.count(y));
 				auto y_let_name = signal_let_bound_name.at(y);
 
-				f << stringf("(union %s (Op3 (And) %s %s))\n", y_let_name.c_str(), a_let_name.c_str(), b_let_name.c_str()).c_str();
+				f << stringf("(union %s (Op2 (And) %s %s))\n", y_let_name.c_str(), a_let_name.c_str(), b_let_name.c_str()).c_str();
 			} else {
 				log_error("Unimplemented cell type %s for cell %s.%s.\n", log_id(cell->type), log_id(module), log_id(cell));
 			}
@@ -1224,7 +1224,7 @@ struct LakeroadWorker {
 			assert(signal_let_bound_name.count(sigspec));
 			auto let_bound_id = signal_let_bound_name.at(sigspec);
 
-			f << stringf("(union %s (Var %s %d))\n", let_bound_id.c_str(), signal_name.c_str(), GetSize(sigspec)).c_str();
+			f << stringf("(union %s (Var \"%s\" %d))\n", let_bound_id.c_str(), signal_name.c_str(), GetSize(sigspec)).c_str();
 		}
 
 		// For each output, generate a let binding.

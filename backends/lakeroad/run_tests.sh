@@ -7,7 +7,7 @@ SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 YOSYS=$(realpath "$SCRIPT_DIR/../../yosys")
 
 function run_lakeroad_backend() {
-  $YOSYS -q -l "<stderr>" -p "read_verilog -sv $1; write_lakeroad"
+  $YOSYS -q -l "$(mktemp)" -p "read_verilog -sv $1; write_lakeroad"
 }
 
 failed=0
