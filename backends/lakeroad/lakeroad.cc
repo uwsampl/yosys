@@ -1143,6 +1143,9 @@ struct LakeroadWorker {
 
 	void run()
 	{
+		if (module->processes.size() > 0)
+			log_error("Module has processes.\n");
+
 		// IDs used to generate let expressions.
 		int id = 0;
 		auto get_new_id_str = [&]() { return stringf("v%d", id++); };
