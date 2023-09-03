@@ -21,6 +21,9 @@
 // use the reference design file.
 /////////////////////////////////////////////////////////////////////////////
 
+// RUN: "$YOSYS" -p 'read_verilog -sv %s; prep -top permuter_4x4_sim; pmuxtree; write_lakeroad' \
+// RUN:   | FileCheck %s
+
 module permuter_4x4_sim #(
     parameter SIZE = 4
 ) (
