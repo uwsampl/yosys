@@ -1,3 +1,5 @@
+// DO NOT MERGE: need to get permission to use this file.
+//
 // Copyright 2023 Intel Corporation.
 //
 // This reference design file is subject licensed to you by the terms and
