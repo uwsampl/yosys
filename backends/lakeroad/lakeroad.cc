@@ -1174,42 +1174,94 @@ struct LakeroadWorker {
 
 		std::map<RTLIL::SigSpec, std::string> signal_let_bound_name;
 
+		// Does not sigmap the signal; you should sigmap the signal if you need it
+		// sigmapped.
+		auto get_expression_for_signal = [&](const SigSpec &sig) {
+			// If we've already handled the expression, return it.
+			if (signal_let_bound_name.count(sig))
+				return signal_let_bound_name.at(sig);
+
+			// SigSpecs are either constants, wires, or concatenations and selections
+			// of wires. We simply need to handle each case.
+
+			if (sig.is_fully_const()) {
+				// If the signal is a constant, we can just use the constant.
+				auto const_str = stringf("(BV %s %d)", Const(sig.as_const()).as_string().c_str(), sig.size());
+				auto new_id = get_new_id_str();
+				auto let_expr = let(new_id, const_str);
+				auto signal_name = get_signal_name(sig);
+				f << "; " << signal_name << "\n";
+				f << let_expr;
+				signal_let_bound_name.insert({sig, new_id});
+				return const_str;
+			} else if (sig.is_wire()) {
+				// If the signal is a simple wire, we can just use the name of the wire.
+				auto signal_name = get_signal_name(sig);
+				auto let_bound_id = get_new_id_str();
+				// Generate wire expression
+				auto let_expr = let(let_bound_id, wire_expr(let_bound_id, GetSize(sig)));
+				f << "; " << signal_name << "\n";
+				f << let_expr;
+				signal_let_bound_name.insert({sig, let_bound_id});
+				return let_bound_id;
+			} else {
+				log_error("Unhandled case of signal for %s.\n", log_signal(sig));
+			}
+		};
+
 		// Create Wire expression for each wire.
+		// We don't have to do this upfront anymore. Expressions can just be created
+		// as needed.
 		f << "; wire declarations\n";
 		for (auto wire : module->wires()) {
-			auto sigspec = sigmap(wire);
-			if (signal_let_bound_name.count(sigspec))
-				continue;
-			auto signal_name = get_signal_name(sigspec);
-			auto let_bound_id = get_new_id_str();
-
-			// Not sure if we'll ever need this, if we can always get a name for each wire.
-			// auto id_str = get_new_id_str();
-
-			// Generate wire expression
-			f << "; " << signal_name << "\n";
-			f << let(let_bound_id, wire_expr(let_bound_id, GetSize(wire))).c_str();
-			signal_let_bound_name.insert({wire, let_bound_id});
+			get_expression_for_signal(sigmap(wire));
 		}
 
 		// Handle cells
 		f << "\n; cells\n";
 		for (auto cell : module->cells()) {
 
-			if (cell->type == ID($and)) {
+			if (cell->type.in(ID($and), ID($or))) {
 				assert(cell->connections().size() == 3);
-				auto a = sigmap(cell->getPort(ID::A));
-				auto b = sigmap(cell->getPort(ID::B));
-				auto y = sigmap(cell->getPort(ID::Y));
+				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)));
+				auto b_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::B)));
+				auto y_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::Y)));
 
-				assert(signal_let_bound_name.count(a));
-				auto a_let_name = signal_let_bound_name.at(a);
-				assert(signal_let_bound_name.count(b));
-				auto b_let_name = signal_let_bound_name.at(b);
-				assert(signal_let_bound_name.count(y));
-				auto y_let_name = signal_let_bound_name.at(y);
+				std::string op_str;
+				if (cell->type == ID($and))
+					op_str = "(And)";
+				else if (cell->type == ID($or))
+					op_str = "(Or)";
+				else
+					log_error("Unimplemented cell type %s for cell %s.%s.\n", log_id(cell->type), log_id(module), log_id(cell));
 
-				f << stringf("(union %s (Op2 (And) %s %s))\n", y_let_name.c_str(), a_let_name.c_str(), b_let_name.c_str()).c_str();
+				f << stringf("(union %s (Op2 %s %s %s))\n", y_let_name.c_str(), op_str.c_str(), a_let_name.c_str(),
+					     b_let_name.c_str())
+				       .c_str();
+			} else if (cell->type.in(ID($mux))) {
+				assert(cell->connections().size() == 4);
+				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)));
+				auto b_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::B)));
+				auto s_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::S)));
+				auto y_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::Y)));
+
+				f << stringf("(union %s (Mux %s %s %s))\n", y_let_name.c_str(), s_let_name.c_str(), a_let_name.c_str(),
+					     b_let_name.c_str())
+				       .c_str();
+
+			} else if (cell->type == ID($dff)) {
+				assert(cell->connections().size() == 3);
+				auto d_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::D)));
+				auto clk_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::CLK)));
+				auto q_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::Q)));
+
+				f << "; TODO: assuming 0 default for Reg\n";
+				f << stringf("(union %s (Reg 0 %s %s))\n", q_let_name.c_str(), clk_let_name.c_str(), d_let_name.c_str());
+
+			} else if (cell->type == ID($pmux)) {
+				// Don't support $pmux: require them to run pmuxtree instead.
+				log_error("Unsupported cell type %s for cell %s.%s -- please run `pmuxtree` before `write_lakeroad`.\n",
+					  log_id(cell->type), log_id(module), log_id(cell));
 			} else {
 				log_error("Unimplemented cell type %s for cell %s.%s.\n", log_id(cell->type), log_id(module), log_id(cell));
 			}
