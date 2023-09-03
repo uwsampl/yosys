@@ -1139,8 +1139,119 @@ struct LakeroadWorker {
 		return nid;
 	}
 
-	LakeroadWorker(std::ostream &f, RTLIL::Module *module) : f(f), sigmap(module), module(module)
+	LakeroadWorker(std::ostream &f, RTLIL::Module *module) : f(f), sigmap(module), module(module) {}
+
+	void run()
 	{
+		// IDs used to generate let expressions.
+		int id = 0;
+		auto get_new_id_str = [&]() { return stringf("v%d", id++); };
+
+		// Get signal name.
+		auto get_signal_name = [&](const SigSpec &sig) {
+			auto signal_name = std::string(log_signal(sig));
+			assert(signal_name.size() > 0);
+			if (signal_name[0] == '\\')
+				signal_name = signal_name.substr(1);
+			return signal_name;
+		};
+
+		// Function to generate a let expression.
+		auto let = [&](const std::string &id_str, const std::string &expr) { return stringf("(let %s %s)\n", id_str.c_str(), expr.c_str()); };
+
+		// Wire expressions (which we can eventually delete)
+		vector<std::string> wire_exprs;
+
+		// Generate wire expression.
+		auto wire_expr = [&](const std::string &name, const int bitwidth) {
+			auto s = stringf("(Wire %s %d)", name.c_str(), bitwidth);
+			wire_exprs.push_back(s);
+			return s;
+		};
+
+		std::map<RTLIL::SigSpec, std::string> signal_let_bound_name;
+
+		// Create Wire expression for each wire.
+		f << "; wire declarations\n";
+		for (auto wire : module->wires()) {
+			auto sigspec = sigmap(wire);
+			if (signal_let_bound_name.count(sigspec))
+				continue;
+			auto signal_name = get_signal_name(sigspec);
+			auto let_bound_id = get_new_id_str();
+
+			// Not sure if we'll ever need this, if we can always get a name for each wire.
+			// auto id_str = get_new_id_str();
+
+			// Generate wire expression
+			f << "; " << signal_name << "\n";
+			f << let(let_bound_id, wire_expr(let_bound_id, GetSize(wire))).c_str();
+			signal_let_bound_name.insert({wire, let_bound_id});
+		}
+
+		// Handle cells
+		f << "\n; cells\n";
+		for (auto cell : module->cells()) {
+
+			if (cell->type == ID($and)) {
+				assert(cell->connections().size() == 3);
+				auto a = sigmap(cell->getPort(ID::A));
+				auto b = sigmap(cell->getPort(ID::B));
+				auto y = sigmap(cell->getPort(ID::Y));
+
+				assert(signal_let_bound_name.count(a));
+				auto a_let_name = signal_let_bound_name.at(a);
+				assert(signal_let_bound_name.count(b));
+				auto b_let_name = signal_let_bound_name.at(b);
+				assert(signal_let_bound_name.count(y));
+				auto y_let_name = signal_let_bound_name.at(y);
+
+				f << stringf("(union %s (Op3 (And) %s %s))\n", y_let_name.c_str(), a_let_name.c_str(), b_let_name.c_str()).c_str();
+			} else {
+				log_error("Unimplemented cell type %s for cell %s.%s.\n", log_id(cell->type), log_id(module), log_id(cell));
+			}
+		}
+
+		// For each input, generate Var expression.
+		f << "\n; inputs\n";
+		for (auto wire : module->wires()) {
+			if (!wire->port_id || !wire->port_input)
+				continue;
+
+			auto sigspec = sigmap(wire);
+			auto signal_name = get_signal_name(sigspec);
+
+			assert(signal_let_bound_name.count(sigspec));
+			auto let_bound_id = signal_let_bound_name.at(sigspec);
+
+			f << stringf("(union %s (Var %s %d))\n", let_bound_id.c_str(), signal_name.c_str(), GetSize(sigspec)).c_str();
+		}
+
+		// For each output, generate a let binding.
+		f << "\n; outputs\n";
+		for (auto wire : module->wires()) {
+			if (!wire->port_id || !wire->port_output)
+				continue;
+
+			// The name before sigmapping should be the output port name, i hope!
+			auto signal_name_pre_sigmap = get_signal_name(wire);
+
+			// The name after sigmapping will help us figure out which let ID holds the value of this signal.
+			auto sigspec = sigmap(wire);
+			auto signal_name = get_signal_name(sigspec);
+			assert(signal_let_bound_name.count(sigspec));
+			auto let_bound_id = signal_let_bound_name.at(sigspec);
+
+			f << stringf("(let %s %s)\n", signal_name_pre_sigmap.c_str(), let_bound_id.c_str()).c_str();
+		}
+
+		// Delete Wire expressions.
+		f << "\n; delete wire expressions\n";
+		for (auto wire_expr : wire_exprs) {
+			f << stringf("(delete %s)\n", wire_expr.c_str()).c_str();
+		}
+
+		return;
 		for (auto wire : module->wires()) {
 			// Some kind of initialization thing?
 			// if (wire->attributes.count(ID::init)) {
@@ -1296,7 +1407,8 @@ struct LakeroadWorker {
 		// 		}
 
 		// 		int nid2 = next_nid++;
-		// 		btorf("%d next %d %d %d%s\n", nid2, sid, nid, nid_head, (mem->cell ? getinfo(mem->cell) : getinfo(mem->mem)).c_str());
+		// 		btorf("%d next %d %d %d%s\n", nid2, sid, nid, nid_head, (mem->cell ? getinfo(mem->cell) :
+		// getinfo(mem->mem)).c_str());
 
 		// 		btorf_pop(stringf("next %s", log_id(mem->memid)));
 		// 	}
@@ -1434,7 +1546,7 @@ struct BtorBackend : public Backend {
 		if (topmod == nullptr)
 			log_cmd_error("No top module found.\n");
 
-		LakeroadWorker(*f, topmod);
+		LakeroadWorker(*f, topmod).run();
 
 		// *f << stringf("; end of yosys output\n");
 	}

@@ -1,4 +1,7 @@
 #!/bin/bash
+# Each test file should have a corresponding .expect file. The .expect file
+# should contain the expected output of the Lakeroad Yosys backend for the
+# given test file, minus any comment lines or blank lines.
 
 SCRIPT_DIR=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
 YOSYS=$(realpath "$SCRIPT_DIR/../../yosys")
@@ -20,8 +23,8 @@ for f in "$SCRIPT_DIR"/tests/*.sv ; do
   # Run Lakeroad Yosys backend
   out=$(run_lakeroad_backend "$f")
 
-  # Check result
-  if ! diff <(echo "$out") <(cat "$f".expect); then
+  # Check result, ignoring comment lines and blank lines.
+  if ! diff -I '^;' -B <(echo "$out") <(cat "$f".expect); then
     echo "Test failed for $f"
     failed=1
   fi 
