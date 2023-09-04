@@ -1331,7 +1331,7 @@ struct LakeroadWorker {
 			}
 		}
 
-		// For each input, generate Var expression.
+		// For each input, generate Var expression and a let binding.
 		f << "\n; inputs\n";
 		for (auto wire : module->wires()) {
 			if (!wire->port_id || !wire->port_input)
@@ -1343,7 +1343,8 @@ struct LakeroadWorker {
 			assert(signal_let_bound_name.count(sigspec));
 			auto let_bound_id = signal_let_bound_name.at(sigspec);
 
-			f << stringf("(union %s (Var \"%s\" %d))\n", let_bound_id.c_str(), signal_name.c_str(), GetSize(sigspec)).c_str();
+			f << stringf("(let %s (Var \"%s\" %d))\n", signal_name.c_str(), signal_name.c_str(), GetSize(sigspec)).c_str();
+			f << stringf("(union %s %s)\n", let_bound_id.c_str(), signal_name.c_str()).c_str();
 		}
 
 		// For each output, generate a let binding.
