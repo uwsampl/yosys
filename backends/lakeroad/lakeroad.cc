@@ -1176,7 +1176,7 @@ struct LakeroadWorker {
 
 		// Does not sigmap the signal; you should sigmap the signal if you need it
 		// sigmapped.
-		auto get_expression_for_signal = [&](const SigSpec &sig) {
+		std::function<std::string(const SigSpec &)> get_expression_for_signal = [&](const SigSpec &sig) {
 			// If we've already handled the expression, return it.
 			if (signal_let_bound_name.count(sig))
 				return signal_let_bound_name.at(sig);
@@ -1186,14 +1186,14 @@ struct LakeroadWorker {
 
 			if (sig.is_fully_const()) {
 				// If the signal is a constant, we can just use the constant.
-				auto const_str = stringf("(BV %s %d)", Const(sig.as_const()).as_string().c_str(), sig.size());
+				auto const_str = stringf("(BV %d %d)", Const(sig.as_const()).as_int(), sig.size());
 				auto new_id = get_new_id_str();
 				auto let_expr = let(new_id, const_str);
 				auto signal_name = get_signal_name(sig);
 				f << "; " << signal_name << "\n";
 				f << let_expr;
 				signal_let_bound_name.insert({sig, new_id});
-				return const_str;
+				return new_id;
 			} else if (sig.is_wire()) {
 				// If the signal is a simple wire, we can just use the name of the wire.
 				auto signal_name = get_signal_name(sig);
@@ -1204,6 +1204,54 @@ struct LakeroadWorker {
 				f << let_expr;
 				signal_let_bound_name.insert({sig, let_bound_id});
 				return let_bound_id;
+			} else if (sig.chunks().size() > 1) {
+				// If the signal is multiple chunks, we need to generate a concatenation.
+
+				f << "; " << log_signal(sig) << "\n";
+
+				// Generate expression for each chunk.
+				std::vector<std::string> chunk_exprs;
+				for (auto chunk : sig.chunks()) {
+					chunk_exprs.push_back(get_expression_for_signal(chunk));
+				}
+
+				// Generate concatenation expressions.
+				auto concat_expr = chunk_exprs[0];
+				for (size_t i = 1; i < chunk_exprs.size(); i++) {
+					auto new_id = get_new_id_str();
+					auto let_expr = let(new_id, stringf("(Concat %s %s)", concat_expr.c_str(), chunk_exprs[i].c_str()));
+					f << let_expr;
+					concat_expr = new_id;
+				}
+
+				signal_let_bound_name.insert({sig, concat_expr});
+				return concat_expr;
+			} else if (sig.chunks().size() == 1 && sig.chunks()[0].wire->width != sig.size()) {
+				// This branch is meant to capture the case where the signal is a
+				// slice/extraction. I'm not quite sure how to check this in Yosys
+				// though.
+				//
+				// It may be the case that we've set up these if statements in a way
+				// that this is the only possible case that's left. That would be nice.
+				// Currently, the condition in this else if branch is a little messy.
+
+				auto chunk = sig.chunks()[0];
+
+				if (chunk.wire->upto) {
+					// You can copy implementation for upto from verilog_backend.cc.
+					log_error("Unimplemented case of `upto==true` in %s.\n", log_signal(sig));
+				}
+
+				// The let-bound ID string of the expression to extract from.
+				auto extract_from_expr = get_expression_for_signal(sigmap(sig.chunks()[0].wire));
+				auto new_id = get_new_id_str();
+				auto extract_expr = stringf("(Extract %d %d %s)", (chunk.offset + chunk.width - 1) + chunk.wire->start_offset,
+							    chunk.offset + chunk.wire->start_offset, extract_from_expr.c_str());
+
+				auto let_expr = let(new_id, extract_expr);
+				f << let_expr;
+				signal_let_bound_name.insert({sig, new_id});
+				return new_id;
 			} else {
 				log_error("Unhandled case of signal for %s.\n", log_signal(sig));
 			}
@@ -1221,7 +1269,21 @@ struct LakeroadWorker {
 		f << "\n; cells\n";
 		for (auto cell : module->cells()) {
 
-			if (cell->type.in(ID($and), ID($or))) {
+			if (cell->type.in(ID($logic_not))) {
+				// Unary ops.
+				assert(cell->connections().size() == 2);
+				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)));
+				auto y_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::Y)));
+
+				std::string op_str;
+				if (cell->type == ID($logic_not))
+					op_str = "(LogicNot)";
+				else
+					log_error("This should be unreachable. You are missing an else if branch.\n");
+
+				f << stringf("(union %s (Op1 %s %s))\n", y_let_name.c_str(), op_str.c_str(), a_let_name.c_str()).c_str();
+			} else if (cell->type.in(ID($and), ID($or), ID($eq))) {
+				// Binary ops.
 				assert(cell->connections().size() == 3);
 				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)));
 				auto b_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::B)));
@@ -1232,8 +1294,10 @@ struct LakeroadWorker {
 					op_str = "(And)";
 				else if (cell->type == ID($or))
 					op_str = "(Or)";
+				else if (cell->type == ID($eq))
+					op_str = "(Eq)";
 				else
-					log_error("Unimplemented cell type %s for cell %s.%s.\n", log_id(cell->type), log_id(module), log_id(cell));
+					log_error("This should be unreachable. You are missing an else if branch.\n");
 
 				f << stringf("(union %s (Op2 %s %s %s))\n", y_let_name.c_str(), op_str.c_str(), a_let_name.c_str(),
 					     b_let_name.c_str())

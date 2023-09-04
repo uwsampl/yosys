@@ -53,3 +53,5 @@ end
 
 endmodule
 
+
+// CHECK: blah blh
