@@ -1160,7 +1160,7 @@ struct LakeroadWorker {
 		};
 
 		// Function to generate a let expression.
-		auto let = [&](const std::string &id_str, const std::string &expr) { return stringf("(let %s %s)\n", id_str.c_str(), expr.c_str()); };
+		auto let = [&](const std::string &id_str, const std::string &expr) { return stringf("(let %s %s)", id_str.c_str(), expr.c_str()); };
 
 		// Wire expressions (which we can eventually delete)
 		vector<std::string> wire_exprs;
@@ -1176,13 +1176,18 @@ struct LakeroadWorker {
 
 		// Does not sigmap the signal; you should sigmap the signal if you need it
 		// sigmapped.
-		std::function<std::string(const SigSpec &)> get_expression_for_signal = [&](const SigSpec &sig) {
+		//
+		// to_width = -1 means no extension.
+		std::function<std::string(const SigSpec &, int)> get_expression_for_signal = [&](const SigSpec &sig, int to_width) {
 			// If we've already handled the expression, return it.
 			if (signal_let_bound_name.count(sig))
 				return signal_let_bound_name.at(sig);
 
 			// SigSpecs are either constants, wires, or concatenations and selections
 			// of wires. We simply need to handle each case.
+
+			// The output expression will go in here.
+			std::string out_expr;
 
 			if (sig.is_fully_const()) {
 				// If the signal is a constant, we can just use the constant.
@@ -1191,9 +1196,8 @@ struct LakeroadWorker {
 				auto let_expr = let(new_id, const_str);
 				auto signal_name = get_signal_name(sig);
 				f << "; " << signal_name << "\n";
-				f << let_expr;
-				signal_let_bound_name.insert({sig, new_id});
-				return new_id;
+				f << let_expr << "\n";
+				out_expr = new_id;
 			} else if (sig.is_wire()) {
 				// If the signal is a simple wire, we can just use the name of the wire.
 				auto signal_name = get_signal_name(sig);
@@ -1201,9 +1205,8 @@ struct LakeroadWorker {
 				// Generate wire expression
 				auto let_expr = let(let_bound_id, wire_expr(let_bound_id, GetSize(sig)));
 				f << "; " << signal_name << "\n";
-				f << let_expr;
-				signal_let_bound_name.insert({sig, let_bound_id});
-				return let_bound_id;
+				f << let_expr << "\n";
+				out_expr = let_bound_id;
 			} else if (sig.chunks().size() > 1) {
 				// If the signal is multiple chunks, we need to generate a concatenation.
 
@@ -1212,7 +1215,7 @@ struct LakeroadWorker {
 				// Generate expression for each chunk.
 				std::vector<std::string> chunk_exprs;
 				for (auto chunk : sig.chunks()) {
-					chunk_exprs.push_back(get_expression_for_signal(chunk));
+					chunk_exprs.push_back(get_expression_for_signal(chunk, -1));
 				}
 
 				// Generate concatenation expressions.
@@ -1220,12 +1223,11 @@ struct LakeroadWorker {
 				for (size_t i = 1; i < chunk_exprs.size(); i++) {
 					auto new_id = get_new_id_str();
 					auto let_expr = let(new_id, stringf("(Concat %s %s)", concat_expr.c_str(), chunk_exprs[i].c_str()));
-					f << let_expr;
+					f << let_expr << "\n";
 					concat_expr = new_id;
 				}
 
-				signal_let_bound_name.insert({sig, concat_expr});
-				return concat_expr;
+				out_expr = concat_expr;
 			} else if (sig.chunks().size() == 1 && sig.chunks()[0].wire->width != sig.size()) {
 				// This branch is meant to capture the case where the signal is a
 				// slice/extraction. I'm not quite sure how to check this in Yosys
@@ -1243,18 +1245,37 @@ struct LakeroadWorker {
 				}
 
 				// The let-bound ID string of the expression to extract from.
-				auto extract_from_expr = get_expression_for_signal(sigmap(sig.chunks()[0].wire));
+				auto extract_from_expr = get_expression_for_signal(sigmap(sig.chunks()[0].wire), -1);
 				auto new_id = get_new_id_str();
 				auto extract_expr = stringf("(Extract %d %d %s)", (chunk.offset + chunk.width - 1) + chunk.wire->start_offset,
 							    chunk.offset + chunk.wire->start_offset, extract_from_expr.c_str());
 
 				auto let_expr = let(new_id, extract_expr);
-				f << let_expr;
-				signal_let_bound_name.insert({sig, new_id});
-				return new_id;
+				f << let_expr << "\n";
+				out_expr = new_id;
 			} else {
 				log_error("Unhandled case of signal for %s.\n", log_signal(sig));
 			}
+
+			// If we need to extend the signal, do so.
+			if (to_width >= 0 && to_width != GetSize(sig)) {
+				if (to_width < GetSize(sig)) {
+					auto new_id = get_new_id_str();
+					auto extend_expr = stringf("(Extract %d %d %s)", to_width - 1, 0, out_expr.c_str());
+					f << let(new_id, extend_expr) << "\n";
+					out_expr = new_id;
+				} else {
+
+					auto new_id = get_new_id_str();
+					f << "; TODO not handling signedness\n";
+					auto extend_expr = stringf("(ZeroExtend %s %d)", out_expr.c_str(), to_width);
+					f << let(new_id, extend_expr) << "\n";
+					out_expr = new_id;
+				}
+			}
+
+			signal_let_bound_name.insert({sig, out_expr});
+			return out_expr;
 		};
 
 		// Create Wire expression for each wire.
@@ -1262,7 +1283,7 @@ struct LakeroadWorker {
 		// as needed.
 		f << "; wire declarations\n";
 		for (auto wire : module->wires()) {
-			get_expression_for_signal(sigmap(wire));
+			get_expression_for_signal(sigmap(wire), -1);
 		}
 
 		// Handle cells
@@ -1272,8 +1293,9 @@ struct LakeroadWorker {
 			if (cell->type.in(ID($logic_not))) {
 				// Unary ops.
 				assert(cell->connections().size() == 2);
-				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)));
-				auto y_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::Y)));
+				auto y = sigmap(cell->getPort(ID::Y));
+				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)), y.size());
+				auto y_let_name = get_expression_for_signal(y, -1);
 
 				std::string op_str;
 				if (cell->type == ID($logic_not))
@@ -1282,20 +1304,19 @@ struct LakeroadWorker {
 					log_error("This should be unreachable. You are missing an else if branch.\n");
 
 				f << stringf("(union %s (Op1 %s %s))\n", y_let_name.c_str(), op_str.c_str(), a_let_name.c_str()).c_str();
-			} else if (cell->type.in(ID($and), ID($or), ID($eq))) {
-				// Binary ops.
+			} else if (cell->type.in(ID($and), ID($or))) {
+				// Binary ops that preserve width.
 				assert(cell->connections().size() == 3);
-				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)));
-				auto b_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::B)));
-				auto y_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::Y)));
+				auto y = sigmap(cell->getPort(ID::Y));
+				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)), y.size());
+				auto b_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::B)), y.size());
+				auto y_let_name = get_expression_for_signal(y, -1);
 
 				std::string op_str;
 				if (cell->type == ID($and))
 					op_str = "(And)";
 				else if (cell->type == ID($or))
 					op_str = "(Or)";
-				else if (cell->type == ID($eq))
-					op_str = "(Eq)";
 				else
 					log_error("This should be unreachable. You are missing an else if branch.\n");
 
@@ -1304,20 +1325,48 @@ struct LakeroadWorker {
 				       .c_str();
 			} else if (cell->type.in(ID($mux))) {
 				assert(cell->connections().size() == 4);
-				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)));
-				auto b_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::B)));
-				auto s_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::S)));
-				auto y_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::Y)));
+				auto y = sigmap(cell->getPort(ID::Y));
+				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)), y.size());
+				auto b_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::B)), y.size());
+				auto s_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::S)), -1);
+				auto y_let_name = get_expression_for_signal(y, -1);
 
-				f << stringf("(union %s (Mux %s %s %s))\n", y_let_name.c_str(), s_let_name.c_str(), a_let_name.c_str(),
+				f << stringf("(union %s (Op3 (Mux) %s %s %s))\n", y_let_name.c_str(), s_let_name.c_str(), a_let_name.c_str(),
 					     b_let_name.c_str())
 				       .c_str();
 
+			} else if (cell->type.in(ID($eq))) {
+				// Binary ops that result in one bit.
+				assert(cell->connections().size() == 3);
+				auto y = sigmap(cell->getPort(ID::Y));
+				auto a = sigmap(cell->getPort(ID::A));
+				auto b = sigmap(cell->getPort(ID::B));
+
+				if (y.size() != 1)
+					log_error("Expected 1-bit output for cell %s.\n", log_id(cell));
+
+				// Extend the inputs to the same width.
+				int to_width = std::max(a.size(), b.size());
+				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)), to_width);
+				auto b_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::B)), to_width);
+
+				auto y_let_name = get_expression_for_signal(y, -1);
+
+				std::string op_str;
+				if (cell->type == ID($eq))
+					op_str = "(Eq)";
+				else
+					log_error("This should be unreachable. You are missing an else if branch.\n");
+
+				f << stringf("(union %s (Op2 %s %s %s))\n", y_let_name.c_str(), op_str.c_str(), a_let_name.c_str(),
+					     b_let_name.c_str())
+				       .c_str();
 			} else if (cell->type == ID($dff)) {
 				assert(cell->connections().size() == 3);
-				auto d_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::D)));
-				auto clk_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::CLK)));
-				auto q_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::Q)));
+				auto q = sigmap(cell->getPort(ID::Q));
+				auto d_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::D)), q.size());
+				auto clk_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::CLK)), -1);
+				auto q_let_name = get_expression_for_signal(q, -1);
 
 				f << "; TODO: assuming 0 default for Reg\n";
 				f << stringf("(union %s (Reg 0 %s %s))\n", q_let_name.c_str(), clk_let_name.c_str(), d_let_name.c_str());
