@@ -1192,7 +1192,7 @@ struct LakeroadWorker {
 
 			if (sig.is_fully_const()) {
 				// If the signal is a constant, we can just use the constant.
-				auto const_str = stringf("(BV %d %d)", Const(sig.as_const()).as_int(), sig.size());
+				auto const_str = stringf("(Op0 (BV %d %d))", Const(sig.as_const()).as_int(), sig.size());
 				auto new_id = get_new_id_str();
 				auto let_expr = let(new_id, const_str);
 				auto signal_name = get_signal_name(sig);
@@ -1223,7 +1223,7 @@ struct LakeroadWorker {
 				auto concat_expr = chunk_exprs[0];
 				for (size_t i = 1; i < chunk_exprs.size(); i++) {
 					auto new_id = get_new_id_str();
-					auto let_expr = let(new_id, stringf("(Concat %s %s)", concat_expr.c_str(), chunk_exprs[i].c_str()));
+					auto let_expr = let(new_id, stringf("(Op2 (Concat) %s %s)", concat_expr.c_str(), chunk_exprs[i].c_str()));
 					f << let_expr << "\n";
 					concat_expr = new_id;
 				}
@@ -1248,7 +1248,7 @@ struct LakeroadWorker {
 				// The let-bound ID string of the expression to extract from.
 				auto extract_from_expr = get_expression_for_signal(sigmap(sig.chunks()[0].wire), -1);
 				auto new_id = get_new_id_str();
-				auto extract_expr = stringf("(Extract %d %d %s)", (chunk.offset + chunk.width - 1) + chunk.wire->start_offset,
+				auto extract_expr = stringf("(Op1 (Extract %d %d) %s)", (chunk.offset + chunk.width - 1) + chunk.wire->start_offset,
 							    chunk.offset + chunk.wire->start_offset, extract_from_expr.c_str());
 
 				auto let_expr = let(new_id, extract_expr);
@@ -1262,14 +1262,14 @@ struct LakeroadWorker {
 			if (to_width >= 0 && to_width != GetSize(sig)) {
 				if (to_width < GetSize(sig)) {
 					auto new_id = get_new_id_str();
-					auto extend_expr = stringf("(Extract %d %d %s)", to_width - 1, 0, out_expr.c_str());
+					auto extend_expr = stringf("(Op1 (Extract %d %d) %s)", to_width - 1, 0, out_expr.c_str());
 					f << let(new_id, extend_expr) << "\n";
 					out_expr = new_id;
 				} else {
 
 					auto new_id = get_new_id_str();
 					f << "; TODO not handling signedness\n";
-					auto extend_expr = stringf("(ZeroExtend %s %d)", out_expr.c_str(), to_width);
+					auto extend_expr = stringf("(Op1 (ZeroExtend %d) %s)", to_width, out_expr.c_str());
 					f << let(new_id, extend_expr) << "\n";
 					out_expr = new_id;
 				}
@@ -1374,7 +1374,7 @@ struct LakeroadWorker {
 				auto q_let_name = get_expression_for_signal(q, -1);
 
 				f << "; TODO: assuming 0 default for Reg\n";
-				f << stringf("(union %s (Reg 0 %s %s))\n", q_let_name.c_str(), clk_let_name.c_str(), d_let_name.c_str());
+				f << stringf("(union %s (Op1 (Reg 0) %s))\n", q_let_name.c_str(), /* clk_let_name.c_str(), */ d_let_name.c_str());
 
 			} else if (cell->type == ID($pmux)) {
 				// Don't support $pmux: require them to run pmuxtree instead.
