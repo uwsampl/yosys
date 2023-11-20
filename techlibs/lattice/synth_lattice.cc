@@ -127,6 +127,10 @@ struct SynthLatticePass : public ScriptPass
 		log("        read/write collision\" (same result as setting the no_rw_check\n");
 		log("        attribute on all memories).\n");
 		log("\n");
+		log("    -cmp2softlogic\n");
+		log("        implement constant comparisons in soft logic, do not involve\n");
+		log("        hard carry chains\n");
+		log("\n");
 		log("\n");
 		log("The following commands are executed by this synthesis command:\n");
 		help_script();
@@ -135,6 +139,7 @@ struct SynthLatticePass : public ScriptPass
 
 	string top_opt, edif_file, json_file, family;
 	bool noccu2, nodffe, nobram, nolutram, nowidelut, asyncprld, flatten, dff, retime, abc2, abc9, iopad, nodsp, no_rw_check, have_dsp;
+	bool cmp2softlogic;
 	string postfix, arith_map, brams_map, dsp_map;
 
 	void clear_flags() override
@@ -162,6 +167,7 @@ struct SynthLatticePass : public ScriptPass
 		brams_map = "";
 		dsp_map = "";
 		have_dsp = false;
+		cmp2softlogic = false;
 	}
 
 	void execute(std::vector<std::string> args, RTLIL::Design *design) override
@@ -263,6 +269,10 @@ struct SynthLatticePass : public ScriptPass
 				no_rw_check = true;
 				continue;
 			}
+			if (args[argidx] == "-cmp2softlogic") {
+				cmp2softlogic = true;
+				continue;
+			}
 			break;
 		}
 		extra_args(args, argidx, design);
@@ -343,6 +353,8 @@ struct SynthLatticePass : public ScriptPass
 			run("peepopt");
 			run("opt_clean");
 			run("share");
+			if (cmp2softlogic)
+				run("techmap -map +/cmp2softlogic.v");
 			run("techmap -map +/cmp2lut.v -D LUT_WIDTH=4");
 			run("opt_expr");
 			run("opt_clean");
@@ -373,7 +385,7 @@ struct SynthLatticePass : public ScriptPass
 		{
 			run("opt -fast -mux_undef -undriven -fine");
 			run("memory_map");
-			run("opt -undriven -fine");
+			run("opt -undriven -fine -mux_undef");
 		}
 
 		if (check_label("map_gates"))
@@ -409,6 +421,7 @@ struct SynthLatticePass : public ScriptPass
 				dfflegalize_args += " -cell $_DLATCH_?_ x";
 			}
 			run("dfflegalize" + dfflegalize_args, "($_ALDFF_*_ only if -asyncprld, $_DLATCH_* only if not -asyncprld, $_*DFFE_* only if not -nodffe)");
+			run("opt_merge");
 			if ((abc9 && dff) || help_mode)
 				run("zinit -all w:* t:$_DFF_?_ t:$_DFFE_??_ t:$_SDFF*", "(only if -abc9 and -dff)");
 			run("techmap -D NO_LUT -map +/lattice/cells_map.v");

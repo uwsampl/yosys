@@ -141,7 +141,7 @@ LDLIBS += -lrt
 endif
 endif
 
-YOSYS_VER := 0.32+74
+YOSYS_VER := 0.35+29
 
 # Note: We arrange for .gitcommit to contain the (short) commit hash in
 # tarballs generated with git-archive(1) using .gitattributes. The git repo
@@ -157,7 +157,7 @@ endif
 OBJS = kernel/version_$(GIT_REV).o
 
 bumpversion:
-	sed -i "/^YOSYS_VER := / s/+[0-9][0-9]*$$/+`git log --oneline fbab08a.. | wc -l`/;" Makefile
+	sed -i "/^YOSYS_VER := / s/+[0-9][0-9]*$$/+`git log --oneline cc31c6e.. | wc -l`/;" Makefile
 
 # set 'ABCREV = default' to use abc/ as it is
 #
@@ -165,7 +165,7 @@ bumpversion:
 # is just a symlink to your actual ABC working directory, as 'make mrproper'
 # will remove the 'abc' directory and you do not want to accidentally
 # delete your work on ABC..
-ABCREV = bb64142
+ABCREV = 896e5e7
 ABCPULL = 1
 ABCURL ?= https://github.com/YosysHQ/abc
 ABCMKARGS = CC="$(CXX)" CXX="$(CXX)" ABC_USE_LIBSTDCXX=1 ABC_USE_NAMESPACE=abc VERBOSE=$(Q)
@@ -321,11 +321,11 @@ AR = $(WASI_SDK)/bin/ar
 RANLIB = $(WASI_SDK)/bin/ranlib
 WASIFLAGS := --sysroot $(WASI_SDK)/share/wasi-sysroot $(WASIFLAGS)
 endif
-CXXFLAGS := $(WASIFLAGS) -std=$(CXXSTD) -Os $(filter-out -fPIC,$(CXXFLAGS))
+CXXFLAGS := $(WASIFLAGS) -std=$(CXXSTD) -Os -D_WASI_EMULATED_PROCESS_CLOCKS $(filter-out -fPIC,$(CXXFLAGS))
 LDFLAGS := $(WASIFLAGS) -Wl,-z,stack-size=1048576 $(filter-out -rdynamic,$(LDFLAGS))
-LDLIBS := $(filter-out -lrt,$(LDLIBS))
+LDLIBS := -lwasi-emulated-process-clocks $(filter-out -lrt,$(LDLIBS))
 ABCMKARGS += AR="$(AR)" RANLIB="$(RANLIB)"
-ABCMKARGS += ARCHFLAGS="$(WASIFLAGS) -DABC_USE_STDINT_H -DABC_NO_DYNAMIC_LINKING -DABC_NO_RLIMIT -Wno-c++11-narrowing"
+ABCMKARGS += ARCHFLAGS="$(WASIFLAGS) -D_WASI_EMULATED_PROCESS_CLOCKS -DABC_USE_STDINT_H -DABC_NO_DYNAMIC_LINKING -DABC_NO_RLIMIT -Wno-c++11-narrowing"
 ABCMKARGS += OPTFLAGS="-Os"
 EXE = .wasm
 
@@ -357,7 +357,7 @@ CXXFLAGS := $(filter-out -fPIC,$(CXXFLAGS))
 LDFLAGS := $(filter-out -rdynamic,$(LDFLAGS)) -s
 LDLIBS := $(filter-out -lrt,$(LDLIBS))
 ABCMKARGS += ARCHFLAGS="-DABC_USE_STDINT_H -DWIN32_NO_DLL -DHAVE_STRUCT_TIMESPEC -fpermissive -w"
-ABCMKARGS += LIBS="-lpthread -s" ABC_USE_NO_READLINE=0 CC="i686-w64-mingw32-gcc" CXX="$(CXX)"
+ABCMKARGS += LIBS="-lpthread -lshlwapi -s" ABC_USE_NO_READLINE=0 CC="i686-w64-mingw32-gcc" CXX="$(CXX)"
 EXE = .exe
 
 else ifeq ($(CONFIG),msys2-64)
@@ -368,7 +368,7 @@ CXXFLAGS := $(filter-out -fPIC,$(CXXFLAGS))
 LDFLAGS := $(filter-out -rdynamic,$(LDFLAGS)) -s
 LDLIBS := $(filter-out -lrt,$(LDLIBS))
 ABCMKARGS += ARCHFLAGS="-DABC_USE_STDINT_H -DWIN32_NO_DLL -DHAVE_STRUCT_TIMESPEC -fpermissive -w"
-ABCMKARGS += LIBS="-lpthread -s" ABC_USE_NO_READLINE=0 CC="x86_64-w64-mingw32-gcc" CXX="$(CXX)"
+ABCMKARGS += LIBS="-lpthread -lshlwapi -s" ABC_USE_NO_READLINE=0 CC="x86_64-w64-mingw32-gcc" CXX="$(CXX)"
 EXE = .exe
 
 else ifneq ($(CONFIG),none)
@@ -606,31 +606,35 @@ Q =
 S =
 endif
 
-$(eval $(call add_include_file,kernel/yosys.h))
-$(eval $(call add_include_file,kernel/hashlib.h))
-$(eval $(call add_include_file,kernel/log.h))
-$(eval $(call add_include_file,kernel/rtlil.h))
 $(eval $(call add_include_file,kernel/binding.h))
-$(eval $(call add_include_file,kernel/register.h))
 $(eval $(call add_include_file,kernel/cellaigs.h))
-$(eval $(call add_include_file,kernel/celltypes.h))
 $(eval $(call add_include_file,kernel/celledges.h))
+$(eval $(call add_include_file,kernel/celltypes.h))
 $(eval $(call add_include_file,kernel/consteval.h))
 $(eval $(call add_include_file,kernel/constids.inc))
-$(eval $(call add_include_file,kernel/sigtools.h))
-$(eval $(call add_include_file,kernel/modtools.h))
-$(eval $(call add_include_file,kernel/macc.h))
-$(eval $(call add_include_file,kernel/utils.h))
-$(eval $(call add_include_file,kernel/satgen.h))
-$(eval $(call add_include_file,kernel/qcsat.h))
+$(eval $(call add_include_file,kernel/cost.h))
 $(eval $(call add_include_file,kernel/ff.h))
 $(eval $(call add_include_file,kernel/ffinit.h))
+$(eval $(call add_include_file,kernel/ffmerge.h))
+$(eval $(call add_include_file,kernel/fmt.h))
 ifeq ($(ENABLE_ZLIB),1)
 $(eval $(call add_include_file,kernel/fstdata.h))
 endif
-$(eval $(call add_include_file,kernel/mem.h))
-$(eval $(call add_include_file,kernel/yw.h))
+$(eval $(call add_include_file,kernel/hashlib.h))
 $(eval $(call add_include_file,kernel/json.h))
+$(eval $(call add_include_file,kernel/log.h))
+$(eval $(call add_include_file,kernel/macc.h))
+$(eval $(call add_include_file,kernel/modtools.h))
+$(eval $(call add_include_file,kernel/mem.h))
+$(eval $(call add_include_file,kernel/qcsat.h))
+$(eval $(call add_include_file,kernel/register.h))
+$(eval $(call add_include_file,kernel/rtlil.h))
+$(eval $(call add_include_file,kernel/satgen.h))
+$(eval $(call add_include_file,kernel/sigtools.h))
+$(eval $(call add_include_file,kernel/timinginfo.h))
+$(eval $(call add_include_file,kernel/utils.h))
+$(eval $(call add_include_file,kernel/yosys.h))
+$(eval $(call add_include_file,kernel/yw.h))
 $(eval $(call add_include_file,libs/ezsat/ezsat.h))
 $(eval $(call add_include_file,libs/ezsat/ezminisat.h))
 ifeq ($(ENABLE_ZLIB),1)
