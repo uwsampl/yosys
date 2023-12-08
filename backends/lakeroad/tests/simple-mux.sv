@@ -1,4 +1,5 @@
-// RUN: "$YOSYS" -p 'read_verilog -sv %s; prep -top test; pmuxtree; write_lakeroad'
+// RUN: "$YOSYS" -p 'read_verilog -sv %s; prep -top test; pmuxtree;\
+// RUN: proc; opt; memory; opt; techmap; opt; abc; opt; write_lakeroad'
 module test(input [2:0] a, output [2:0] out);
   // assign out = ~ a;
   always_comb begin
