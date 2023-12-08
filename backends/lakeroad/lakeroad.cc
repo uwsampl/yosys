@@ -1246,6 +1246,7 @@ struct LakeroadWorker {
 				}
 
 				// The let-bound ID string of the expression to extract from.
+				// FIXME: On certain inputs - this never terminates. Not sure if this is a problem
 				auto extract_from_expr = get_expression_for_signal(sigmap(sig.chunks()[0].wire), -1);
 				auto new_id = get_new_id_str();
 				auto extract_expr = stringf("(Op1 (Extract %d %d) %s)", (chunk.offset + chunk.width - 1) + chunk.wire->start_offset,
@@ -1307,25 +1308,7 @@ struct LakeroadWorker {
 					log_error("This should be unreachable. You are missing an else if branch.\n");
 
 				f << stringf("(union %s (Op1 %s %s))\n", y_let_name.c_str(), op_str.c_str(), a_let_name.c_str()).c_str();
-			}
-			else if (cell->type.in(ID($reduce_and), ID($reduce_or), ID($reduce_bool), ID($reduce_xor), ID($reduce_xnor))) {
-				assert(cell->connections().size() == 2);
-				auto y = sigmap(cell->getPort(ID::Y));
-				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)), y.size());
-				auto y_let_name = get_expression_for_signal(y, -1);
-
-
-				std::string op_str;
-				if (cell->type == ID($reduce_and))
-					op_str = "(ReduceAnd)";
-				if (cell->type.in(ID($reduce_or), ID($reduce_bool)))
-					op_str = "(ReduceOr)";
-				if (cell->type.in(ID($reduce_xor), ID($reduce_xnor)))
-					op_str = "(ReduceXor)"; // NOTE: Not sure why this is the same. Copied from BTOR logic.
-				f << stringf("(union %s (Op1 %s %s))\n", y_let_name.c_str(), op_str.c_str(), a_let_name.c_str()).c_str();
-
-			}
-			else if (cell->type.in(ID($and), ID($or), ID($xor), ID($shr))) {
+			} else if (cell->type.in(ID($and), ID($or), ID($xor), ID($shr))) {
 				// Binary ops that preserve width.
 				assert(cell->connections().size() == 3);
 				auto y = sigmap(cell->getPort(ID::Y));
