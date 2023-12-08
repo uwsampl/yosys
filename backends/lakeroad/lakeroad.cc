@@ -1291,7 +1291,7 @@ struct LakeroadWorker {
 		f << "\n; cells\n";
 		for (auto cell : module->cells()) {
 
-			if (cell->type.in(ID($logic_not))) {
+			if (cell->type.in(ID($logic_not), ID($not))) {
 				// Unary ops.
 				assert(cell->connections().size() == 2);
 				auto y = sigmap(cell->getPort(ID::Y));
@@ -1301,11 +1301,31 @@ struct LakeroadWorker {
 				std::string op_str;
 				if (cell->type == ID($logic_not))
 					op_str = "(LogicNot)";
+				else if (cell->type == ID($not))
+					op_str = "(Not)";
 				else
 					log_error("This should be unreachable. You are missing an else if branch.\n");
 
 				f << stringf("(union %s (Op1 %s %s))\n", y_let_name.c_str(), op_str.c_str(), a_let_name.c_str()).c_str();
-			} else if (cell->type.in(ID($and), ID($or), ID($xor), ID($shr))) {
+			}
+			else if (cell->type.in(ID($reduce_and), ID($reduce_or), ID($reduce_bool), ID($reduce_xor), ID($reduce_xnor))) {
+				assert(cell->connections().size() == 2);
+				auto y = sigmap(cell->getPort(ID::Y));
+				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)), y.size());
+				auto y_let_name = get_expression_for_signal(y, -1);
+
+
+				std::string op_str;
+				if (cell->type == ID($reduce_and))
+					op_str = "(ReduceAnd)";
+				if (cell->type.in(ID($reduce_or), ID($reduce_bool)))
+					op_str = "(ReduceOr)";
+				if (cell->type.in(ID($reduce_xor), ID($reduce_xnor)))
+					op_str = "(ReduceXor)"; // NOTE: Not sure why this is the same. Copied from BTOR logic.
+				f << stringf("(union %s (Op1 %s %s))\n", y_let_name.c_str(), op_str.c_str(), a_let_name.c_str()).c_str();
+
+			}
+			else if (cell->type.in(ID($and), ID($or), ID($xor), ID($shr))) {
 				// Binary ops that preserve width.
 				assert(cell->connections().size() == 3);
 				auto y = sigmap(cell->getPort(ID::Y));
