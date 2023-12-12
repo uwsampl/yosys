@@ -1,0 +1,38 @@
+# Test Lakeroad pass in Yosys.
+
+# Read in Verilog design annotated with information for Lakeroad.
+read_verilog << EOT
+  (* template = "dsp",
+     architecture = "xilinx-ultrascale-plus",
+     initiation_interval = 2 *)
+  module test (
+      (* data *) 
+      input [17:0] a,
+      (* data *)
+      input [17:0] b,
+      (* data *)
+      input [17:0] c,
+      (* data *)
+      input [17:0] d,
+      (* clk *)
+      input clk,
+      (* out *)
+      output [17:0] o);
+
+    reg [17:0] r0;
+    reg [17:0] r1;
+    always @ (posedge clk) begin
+      r0 <= (d+a)*b&c;
+      r1 <= r0;
+    end
+    assign o = r1;
+
+  endmodule
+EOT
+
+# Call Lakeroad pass.
+lakeroad
+
+# Ensure there's exactly one cell, and that that cell is a DSP48E2.
+select -assert-count 1 */t:*
+select -assert-count 1 */t:DSP48E2
