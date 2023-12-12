@@ -1,5 +1,4 @@
-// RUN: "$YOSYS" -p 'read_verilog -sv %s; prep -top test; pmuxtree;\
-// RUN: proc; opt; memory; opt; techmap; opt; abc; opt; write_lakeroad'
+read_verilog -sv <<EOF
 module test(input [2:0] a, output [2:0] out);
   // assign out = ~ a;
   always_comb begin
@@ -12,4 +11,10 @@ module test(input [2:0] a, output [2:0] out);
 	  endcase
   end
 endmodule
-
+EOF
+# Optimize out the mux to simple gates.
+prep -top test; pmuxtree;
+proc; opt; memory; opt;
+techmap; opt;
+abc; opt;
+write_lakeroad

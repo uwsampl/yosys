@@ -1,0 +1,6 @@
+read_verilog -sv <<EOF
+module test(input a, output out);
+  assign out = ~ a;
+endmodule
+EOF
+write_lakeroad
