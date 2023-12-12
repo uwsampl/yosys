@@ -1246,6 +1246,7 @@ struct LakeroadWorker {
 				}
 
 				// The let-bound ID string of the expression to extract from.
+				// FIXME: On certain inputs - this never terminates. Not sure if this is a problem
 				auto extract_from_expr = get_expression_for_signal(sigmap(sig.chunks()[0].wire), -1);
 				auto new_id = get_new_id_str();
 				auto extract_expr = stringf("(Op1 (Extract %d %d) %s)", (chunk.offset + chunk.width - 1) + chunk.wire->start_offset,
@@ -1291,7 +1292,7 @@ struct LakeroadWorker {
 		f << "\n; cells\n";
 		for (auto cell : module->cells()) {
 
-			if (cell->type.in(ID($logic_not))) {
+			if (cell->type.in(ID($logic_not), ID($not))) {
 				// Unary ops.
 				assert(cell->connections().size() == 2);
 				auto y = sigmap(cell->getPort(ID::Y));
@@ -1301,6 +1302,8 @@ struct LakeroadWorker {
 				std::string op_str;
 				if (cell->type == ID($logic_not))
 					op_str = "(LogicNot)";
+				else if (cell->type == ID($not))
+					op_str = "(Not)";
 				else
 					log_error("This should be unreachable. You are missing an else if branch.\n");
 
