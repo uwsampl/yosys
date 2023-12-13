@@ -4,4 +4,5 @@ module test(input [1:0] a, input b, output o);
 endmodule
 EOF
 
-write_lakeroad
+# Write output to file instead of stdout
+write_lakeroad file.egg
