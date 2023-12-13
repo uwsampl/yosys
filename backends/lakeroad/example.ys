@@ -6,3 +6,5 @@ EOF
 
 # Write output to file instead of stdout
 write_lakeroad file.egg
+# Write output to stdout
+# write_lakeroad

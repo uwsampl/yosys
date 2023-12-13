@@ -1718,20 +1718,19 @@ struct BtorBackend : public Backend {
 
 		// Copied from firrtl code. Not sure why "filename" is not set ever
 		// even when I pass "write_lakeroad hello.egg" or something
-		size_t argidx = args.size(); // We aren't expecting any arguments.
+		size_t argidx = args.size();
 
-		// Has to come after other arg parsing.
 		if (filename == "") {
-			if (argidx > 0 && args[argidx - 1][0] != '-') {
+			// The command itself is given as an arg
+			if (argidx > 1 && args[argidx - 1][0] != '-') {
 				// extra_args and friends need to see this argument.
 				argidx -= 1;
 				filename = args[argidx];
 			}
 		}
 
+		// Has to come after other arg parsing.
 		extra_args(f, filename, args, argidx);
-
-		// log("Given filename: %s", args.c_str());
 
 		if (topmod == nullptr)
 			log_cmd_error("No top module found.\n");
