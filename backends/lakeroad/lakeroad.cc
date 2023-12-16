@@ -1716,8 +1716,7 @@ struct BtorBackend : public Backend {
 		log_header(design, "Executing Lakeroad egglog backend.\n");
 		RTLIL::Module *topmod = design->top_module();
 
-		// Copied from firrtl code. Not sure why "filename" is not set ever
-		// even when I pass "write_lakeroad hello.egg" or something
+		// Copied from firrtl code.
 		size_t argidx = args.size();
 
 		if (filename == "") {
