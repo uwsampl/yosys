@@ -4,4 +4,8 @@ module test(input [1:0] a, input b, output o);
 endmodule
 EOF
 
+# Write output to stdout
 write_lakeroad
+# Write output to file.egg
+write_lakeroad file.egg
+!rm file.egg
