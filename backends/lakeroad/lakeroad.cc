@@ -1247,6 +1247,10 @@ struct LakeroadWorker {
 
 				// The let-bound ID string of the expression to extract from.
 				// FIXME: On certain inputs - this never terminates. Not sure if this is a problem
+				// sigmap is likely the issue here
+				// splitnets pass w/ drivers option may help (though maybe not because it's the output port)
+				// splitnets ports (yosys -h splitnets)
+				// really need their functional backend
 				auto extract_from_expr = get_expression_for_signal(sigmap(sig.chunks()[0].wire), -1);
 				auto new_id = get_new_id_str();
 				auto extract_expr = stringf("(Op1 (Extract %d %d) %s)", (chunk.offset + chunk.width - 1) + chunk.wire->start_offset,
