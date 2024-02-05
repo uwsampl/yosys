@@ -1383,6 +1383,28 @@ struct LakeroadWorker {
 				f << stringf("(union %s (Op2 %s %s %s))\n", y_let_name.c_str(), op_str.c_str(), a_let_name.c_str(),
 					     b_let_name.c_str())
 				       .c_str();
+			} else if (cell->type.in(ID($reduce_or))) {
+				// Unary ops that result in one bit.
+				assert(cell->connections().size() == 2);
+				auto y = sigmap(cell->getPort(ID::Y));
+				auto a = sigmap(cell->getPort(ID::A));
+
+				if (y.size() != 1)
+					log_error("Expected 1-bit output for cell %s.\n", log_id(cell));
+
+				// Extend the inputs to the same width.
+				int to_width = a.size();
+				auto a_let_name = get_expression_for_signal(sigmap(cell->getPort(ID::A)), to_width);
+
+				auto y_let_name = get_expression_for_signal(y, -1);
+
+				std::string op_str;
+				if (cell->type == ID($reduce_or))
+					op_str = "(ReduceOr)";
+				else
+					log_error("This should be unreachable. You are missing an else if branch.\n");
+
+				f << stringf("(union %s (Op1 %s %s))\n", y_let_name.c_str(), op_str.c_str(), a_let_name.c_str()).c_str();
 			} else if (cell->type == ID($dff)) {
 				assert(cell->connections().size() == 3);
 				auto q = sigmap(cell->getPort(ID::Q));
