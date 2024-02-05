@@ -15,7 +15,6 @@ EOF
 # Optimize out the mux to simple gates.
 prep -top test; pmuxtree;
 proc; opt; memory; opt;
-techmap; opt;
 abc; opt;
 write_lakeroad
 # Writing the verilog first with "-noattr" doesn't cause infinite loop
