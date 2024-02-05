@@ -1251,6 +1251,12 @@ struct LakeroadWorker {
 				// splitnets pass w/ drivers option may help (though maybe not because it's the output port)
 				// splitnets ports (yosys -h splitnets)
 				// really need their functional backend
+				// This *should* be .wire -- to compile a slice like `out[1:0]`, we need
+				// the expression for `out`. This can lead to recursive dependencies:
+				// get expr for out ->
+				// sigmapped out becomes { 0, out[1:0] } ->
+				// get expr for out[1:0] ->
+				// get expr for out
 				auto extract_from_expr = get_expression_for_signal(sigmap(sig.chunks()[0].wire), -1);
 				auto new_id = get_new_id_str();
 				auto extract_expr = stringf("(Op1 (Extract %d %d) %s)", (chunk.offset + chunk.width - 1) + chunk.wire->start_offset,
