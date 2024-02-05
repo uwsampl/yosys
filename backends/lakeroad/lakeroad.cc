@@ -1257,7 +1257,7 @@ struct LakeroadWorker {
 				// sigmapped out becomes { 0, out[1:0] } ->
 				// get expr for out[1:0] ->
 				// get expr for out
-				auto extract_from_expr = get_expression_for_signal(sigmap(sig.chunks()[0].wire), -1);
+				auto extract_from_expr = get_expression_for_signal(sig.chunks()[0].wire, -1);
 				auto new_id = get_new_id_str();
 				auto extract_expr = stringf("(Op1 (Extract %d %d) %s)", (chunk.offset + chunk.width - 1) + chunk.wire->start_offset,
 							    chunk.offset + chunk.wire->start_offset, extract_from_expr.c_str());
@@ -1293,6 +1293,10 @@ struct LakeroadWorker {
 		// Create Wire expression for each wire.
 		// We don't have to do this upfront anymore. Expressions can just be created
 		// as needed.
+		//
+		// Note: we `sigmap` all wires here, so there's no need to `sigmap` them
+		// recursively within get_expression_for_signal. This was a source of an
+		// infinite loop: https://github.com/uwsampl/yosys/issues/10
 		f << "; wire declarations\n";
 		for (auto wire : module->wires()) {
 			get_expression_for_signal(sigmap(wire), -1);
